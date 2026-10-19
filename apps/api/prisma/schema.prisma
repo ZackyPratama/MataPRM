@@ -1,0 +1,244 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String          @id @default(uuid())
+  code           String          @unique
+  name           String
+  role           String
+  pinHash        String
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  salesAsCashier Sale[]          @relation("SaleCashier")
+  salesVoided    Sale[]          @relation("SaleVoidedBy")
+  goldPrices     GoldPrice[]
+  stockMovements StockMovement[]
+  trips          Trip[]
+  specialOrders  SpecialOrder[]
+  auditLogs      AuditLog[]
+  processedOps   ProcessedOp[]
+}
+
+model Karat {
+  id            String         @id @default(uuid())
+  label         String         @unique
+  sortOrder     Int            @default(0)
+  items         Item[]
+  goldPrices    GoldPrice[]
+  specialOrders SpecialOrder[]
+}
+
+model GoldPrice {
+  id           String   @id @default(uuid())
+  karatId      String
+  pricePerGram BigInt
+  effectiveAt  DateTime @default(now())
+  createdById  String
+  createdAt    DateTime @default(now())
+  karat        Karat    @relation(fields: [karatId], references: [id])
+  createdBy    User     @relation(fields: [createdById], references: [id])
+
+  @@index([karatId, effectiveAt])
+}
+
+model Customer {
+  id            String         @id @default(uuid())
+  name          String
+  phone         String?
+  address       String?
+  creditLimit   BigInt         @default(0)
+  note          String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  sales         Sale[]
+  specialOrders SpecialOrder[]
+}
+
+model Supplier {
+  id            String         @id @default(uuid())
+  name          String
+  phone         String?
+  note          String?
+  createdAt     DateTime       @default(now())
+  specialOrders SpecialOrder[]
+}
+
+model Item {
+  id           String          @id @default(uuid())
+  code         String          @unique
+  category     String
+  name         String
+  karatId      String
+  weightMg     Int
+  laborCost    BigInt          @default(0)
+  photoPath    String?
+  status       String          @default("IN_STORE")
+  note         String?
+  version      Int             @default(1)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  karat        Karat           @relation(fields: [karatId], references: [id])
+  movements    StockMovement[]
+  saleItems    SaleItem[]
+  tripItems    TripItem[]
+  specialOrder SpecialOrder?
+
+  @@index([status])
+  @@index([category])
+}
+
+model StockMovement {
+  id         String   @id @default(uuid())
+  itemId     String
+  type       String
+  fromStatus String?
+  toStatus   String
+  refType    String?
+  refId      String?
+  userId     String
+  note       String?
+  createdAt  DateTime @default(now())
+  item       Item     @relation(fields: [itemId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@index([itemId, createdAt])
+}
+
+model Sale {
+  id         String     @id @default(uuid())
+  receiptNo  String     @unique
+  customerId String?
+  cashierId  String
+  tripId     String?
+  subtotal   BigInt
+  discount   BigInt     @default(0)
+  total      BigInt
+  status     String     @default("COMPLETED")
+  voidReason String?
+  voidedAt   DateTime?
+  voidedById String?
+  note       String?
+  soldAt     DateTime
+  createdAt  DateTime   @default(now())
+  customer   Customer?  @relation(fields: [customerId], references: [id])
+  cashier    User       @relation("SaleCashier", fields: [cashierId], references: [id])
+  voidedBy   User?      @relation("SaleVoidedBy", fields: [voidedById], references: [id])
+  trip       Trip?      @relation(fields: [tripId], references: [id])
+  items      SaleItem[]
+  payments   Payment[]
+
+  @@index([soldAt])
+  @@index([customerId])
+}
+
+model SaleItem {
+  id           String @id @default(uuid())
+  saleId       String
+  itemId       String
+  itemCode     String
+  itemName     String
+  karatLabel   String
+  weightMg     Int
+  pricePerGram BigInt
+  laborCost    BigInt
+  lineTotal    BigInt
+  sale         Sale   @relation(fields: [saleId], references: [id])
+  item         Item   @relation(fields: [itemId], references: [id])
+
+  @@unique([saleId, itemId])
+  @@index([itemId])
+}
+
+model Payment {
+  id        String   @id @default(uuid())
+  saleId    String
+  method    String
+  amount    BigInt
+  reference String?
+  paidAt    DateTime
+  sale      Sale     @relation(fields: [saleId], references: [id])
+
+  @@index([saleId])
+}
+
+model Trip {
+  id          String     @id @default(uuid())
+  carrierId   String
+  destination String?
+  status      String     @default("OPEN")
+  startedAt   DateTime   @default(now())
+  closedAt    DateTime?
+  note        String?
+  carrier     User       @relation(fields: [carrierId], references: [id])
+  items       TripItem[]
+  sales       Sale[]
+}
+
+model TripItem {
+  id      String  @id @default(uuid())
+  tripId  String
+  itemId  String
+  outcome String  @default("CARRIED")
+  saleId  String?
+  note    String?
+  trip    Trip    @relation(fields: [tripId], references: [id])
+  item    Item    @relation(fields: [itemId], references: [id])
+
+  @@unique([tripId, itemId])
+}
+
+model SpecialOrder {
+  id                 String    @id @default(uuid())
+  customerId         String
+  supplierId         String?
+  description        String
+  referencePhotoPath String?
+  karatId            String?
+  targetWeightMg     Int?
+  sizeNote           String?
+  targetDate         DateTime?
+  status             String    @default("REQUESTED")
+  depositAmount      BigInt    @default(0)
+  purchasePrice      BigInt?
+  itemId             String?   @unique
+  cancelNote         String?
+  createdById        String
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  customer           Customer  @relation(fields: [customerId], references: [id])
+  supplier           Supplier? @relation(fields: [supplierId], references: [id])
+  karat              Karat?    @relation(fields: [karatId], references: [id])
+  item               Item?     @relation(fields: [itemId], references: [id])
+  createdBy          User      @relation(fields: [createdById], references: [id])
+
+  @@index([status])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  action    String
+  entity    String
+  entityId  String?
+  detail    String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+}
+
+model ProcessedOp {
+  id         String   @id
+  userId     String
+  type       String
+  receivedAt DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id])
+}

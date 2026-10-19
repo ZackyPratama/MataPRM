@@ -1,0 +1,21 @@
+{
+  "name": "mataprm",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.18.3",
+  "scripts": {
+    "dev": "pnpm --filter @mataprm/shared build && pnpm --parallel --filter @mataprm/web --filter @mataprm/api dev",
+    "build": "pnpm --recursive build",
+    "lint": "pnpm --recursive lint",
+    "typecheck": "pnpm --filter @mataprm/shared build && pnpm --recursive typecheck",
+    "test": "pnpm --filter @mataprm/shared build && pnpm --recursive test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.38.0",
+    "@types/node": "^24.8.1",
+    "eslint": "^9.38.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.2",
+    "vitest": "^3.2.4"
+  }
+}
