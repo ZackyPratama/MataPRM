@@ -24,6 +24,7 @@ model User {
   specialOrders  SpecialOrder[]
   auditLogs      AuditLog[]
   processedOps   ProcessedOp[]
+  sessions       Session[]
 }
 
 model Karat {
@@ -241,4 +242,16 @@ model ProcessedOp {
   type       String
   receivedAt DateTime @default(now())
   user       User     @relation(fields: [userId], references: [id])
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, expiresAt])
 }

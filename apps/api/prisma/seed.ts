@@ -1,12 +1,7 @@
-import { randomBytes, scryptSync } from 'node:crypto'
 import { PrismaClient } from '@prisma/client'
+import { hashPin } from '../src/auth.js'
 
 const prisma = new PrismaClient()
-
-function hashPin(pin: string) {
-  const salt = randomBytes(16).toString('hex')
-  return `scrypt:${salt}:${scryptSync(pin, salt, 64).toString('hex')}`
-}
 
 async function main() {
   const users = [

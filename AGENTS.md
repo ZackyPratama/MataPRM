@@ -267,7 +267,7 @@ Fungsi perhitungan harga (bagian 9.2) ditulis **sekali** di `packages/shared` da
 
 ## 12. Model Data (Skema Prisma)
 
-Skema berikut adalah acuan. Cakupannya: tabel MVP, ditambah tabel pesanan khusus dan penjualan keliling yang sudah disiapkan tetapi belum dipakai antarmuka sebelum rilisnya. Tabel piutang (Rilis 4) belum dibuat. Konfigurasi datasource berubah antar versi mayor Prisma, jadi sesuaikan dengan dokumentasi versi yang dipakai.
+Skema berikut adalah acuan. Cakupannya: tabel MVP, ditambah tabel pesanan khusus dan penjualan keliling yang sudah disiapkan tetapi belum dipakai antarmuka sebelum rilisnya. Tabel piutang (Rilis 4) belum dibuat. Konfigurasi datasource berubah antar versi mayor Prisma, jadi sesuaikan dengan dokumentasi versi yang dipakai. `Session` ditambahkan melalui migrasi untuk menyimpan hash token, masa berlaku, dan pencabutan sesi tanpa menyimpan token asli.
 
 ```prisma
 // ============================================================
@@ -316,6 +316,19 @@ model User {
   specialOrders   SpecialOrder[]
   auditLogs       AuditLog[]
   processedOps    ProcessedOp[]
+  sessions        Session[]
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, expiresAt])
 }
 
 // ------------------------------------------------------------
