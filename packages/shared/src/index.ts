@@ -22,6 +22,8 @@ export function serializeBigInts<T>(value: T): unknown {
   return value
 }
 
+export * from './inventory.js'
+
 export const sharedWorkspace = '@mataprm/shared'
 
 export function sharedMessage(): string {
