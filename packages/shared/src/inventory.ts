@@ -5,7 +5,7 @@ const money = z.string().regex(/^(0|[1-9]\d{0,18})$/).transform(value => BigInt(
 
 export const createItemSchema = z.object({
   code: z.string().trim().min(1).max(64),
-  category: z.string().trim().min(1).max(32),
+  category: z.enum(['CINCIN', 'KALUNG', 'GELANG', 'ANTING', 'LIONTIN', 'LAINNYA']),
   name: z.string().trim().min(1).max(160),
   karatId: uuid,
   weightMg: z.number().int().positive().max(2_147_483_647),

@@ -12,10 +12,12 @@
   },
   "dependencies": {
     "@mataprm/shared": "workspace:*",
+    "jsbarcode": "^3.12.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
+    "@types/jsbarcode": "^3.11.4",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.0",

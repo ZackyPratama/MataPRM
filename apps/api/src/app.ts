@@ -96,9 +96,9 @@ export function buildApp(prisma: PrismaClient = defaultPrisma) {
 
   app.get('/api/karats', { preHandler: requireRole(prisma, ['OWNER', 'ASSISTANT']) }, async () => prisma.karat.findMany({ orderBy: { sortOrder: 'asc' } }))
 
-  app.get<{ Querystring: unknown }>('/api/items', { preHandler: requireRole(prisma, ['OWNER', 'ASSISTANT']) }, async (request) => {
+  app.get<{ Querystring: unknown }>('/api/items', { preHandler: requireRole(prisma, ['OWNER', 'ASSISTANT']) }, async (request, reply) => {
     const parsed = itemQuerySchema.safeParse(request.query)
-    if (!parsed.success) return { error: 'INVALID_INPUT', message: 'Filter stok tidak valid.' }
+    if (!parsed.success) return reply.code(400).send({ error: 'INVALID_INPUT', message: 'Filter stok tidak valid.' })
     const { query, status, skip, take } = parsed.data
     const where = { ...(status ? { status } : {}), ...(query ? { OR: [{ code: { contains: query } }, { name: { contains: query } }] } : {}) }
     const [items, total] = await prisma.$transaction([
@@ -116,7 +116,8 @@ export function buildApp(prisma: PrismaClient = defaultPrisma) {
 
   app.post<{ Body: unknown }>('/api/items', { preHandler: requireRole(prisma, ['OWNER', 'ASSISTANT']) }, async (request, reply) => {
     const user = requestUser(request)
-    const raw = request.body && typeof request.body === 'object' ? { ...(request.body as Record<string, unknown>), ...(user.role === 'ASSISTANT' ? { laborCost: '0' } : {}) } : request.body
+    const raw = request.body
+    if (user.role === 'ASSISTANT' && raw && typeof raw === 'object' && 'laborCost' in raw) return reply.code(403).send({ error: 'FORBIDDEN', message: 'Asisten tidak dapat mengatur ongkos.' })
     const parsed = createItemSchema.safeParse(raw)
     if (!parsed.success) return reply.code(400).send({ error: 'INVALID_INPUT', message: 'Data item tidak valid.' })
     const { laborCost, ...data } = parsed.data
@@ -165,14 +166,7 @@ export function buildApp(prisma: PrismaClient = defaultPrisma) {
   app.delete<{ Params: { id: string } }>('/api/items/:id', { preHandler: requireRole(prisma, ['OWNER']) }, async (request, reply) => {
     const item = await prisma.item.findUnique({ where: { id: request.params.id } })
     if (!item) return reply.code(404).send({ error: 'NOT_FOUND', message: 'Item tidak ditemukan.' })
-    if (item.status !== 'IN_STORE') return reply.code(409).send({ error: 'ITEM_NOT_DELETABLE', message: 'Item hanya dapat dihapus saat berada di toko.' })
-    const deleted = await prisma.$transaction(async tx => {
-      const result = await tx.item.deleteMany({ where: { id: item.id, version: item.version, status: 'IN_STORE' } })
-      if (result.count !== 1) throw Object.assign(new Error('CONFLICT'), { code: 'CONFLICT' })
-      await tx.auditLog.create({ data: { userId: requestUser(request).id, action: 'ITEM_DELETE', entity: 'Item', entityId: item.id } })
-      return result
-    })
-    return reply.code(204).send(deleted)
+    return reply.code(409).send({ error: 'ITEM_HISTORY_PRESERVED', message: 'Item tidak dapat dihapus karena riwayat stok harus dipertahankan.' })
   })
 
   app.addHook('onClose', async () => prisma.$disconnect())
