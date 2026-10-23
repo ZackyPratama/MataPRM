@@ -1,6 +1,6 @@
 import Fastify from 'fastify'
 import type { PrismaClient } from '@prisma/client'
-import { sharedMessage } from '@mataprm/shared'
+import { createGoldPriceSchema, serializeBigInts, sharedMessage } from '@mataprm/shared'
 import { createSession, requestUser, requireRole, sessionTokenHash, verifyPin } from './auth.js'
 import { prisma as defaultPrisma } from './database.js'
 
@@ -58,6 +58,39 @@ export function buildApp(prisma: PrismaClient = defaultPrisma) {
       prisma.auditLog.create({ data: { userId: user.id, action: 'AUTH_LOGOUT', entity: 'Session' } }),
     ])
     return reply.code(204).send()
+  })
+
+  app.post<{ Body: unknown }>('/api/gold-prices', { preHandler: requireRole(prisma, ['OWNER']) }, async (request, reply) => {
+    const parsed = createGoldPriceSchema.safeParse(request.body)
+    if (!parsed.success) return reply.code(400).send({ error: 'INVALID_INPUT', message: 'Data harga emas tidak valid.' })
+    const { karatId, pricePerGram, effectiveAt } = parsed.data
+    const karat = await prisma.karat.findUnique({ where: { id: karatId } })
+    if (!karat) return reply.code(404).send({ error: 'NOT_FOUND', message: 'Kadar emas tidak ditemukan.' })
+    const user = requestUser(request)
+    const price = await prisma.$transaction(async tx => {
+      const created = await tx.goldPrice.create({ data: { karatId, pricePerGram, effectiveAt: effectiveAt ? new Date(effectiveAt) : new Date(), createdById: user.id } })
+      await tx.auditLog.create({ data: { userId: user.id, action: 'PRICE_SET', entity: 'GoldPrice', entityId: created.id, detail: JSON.stringify({ karatId, pricePerGram: pricePerGram.toString() }) } })
+      return created
+    })
+    return reply.code(201).send(serializeBigInts(price))
+  })
+
+  app.get<{ Params: { karatId: string } }>('/api/gold-prices/:karatId/current', { preHandler: requireRole(prisma, ['OWNER', 'ASSISTANT']) }, async (request, reply) => {
+    const { karatId } = request.params
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(karatId)) return reply.code(400).send({ error: 'INVALID_INPUT', message: 'Kadar emas tidak valid.' })
+    const price = await prisma.goldPrice.findFirst({ where: { karatId, effectiveAt: { lte: new Date() } }, orderBy: [{ effectiveAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }] })
+    if (!price) return reply.code(404).send({ error: 'NOT_FOUND', message: 'Harga emas belum tersedia.' })
+    return serializeBigInts(price)
+  })
+
+  app.get<{ Params: { karatId: string }; Querystring: { skip?: string; take?: string } }>('/api/gold-prices/:karatId', { preHandler: requireRole(prisma, ['OWNER', 'ASSISTANT']) }, async (request, reply) => {
+    const { karatId } = request.params
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(karatId)) return reply.code(400).send({ error: 'INVALID_INPUT', message: 'Kadar emas tidak valid.' })
+    const skip = request.query.skip ?? '0'
+    const take = request.query.take ?? '50'
+    if (!/^(0|[1-9]\d{0,6})$/.test(skip) || !/^[1-9]\d?$|^100$/.test(take)) return reply.code(400).send({ error: 'INVALID_INPUT', message: 'Halaman tidak valid.' })
+    const prices = await prisma.goldPrice.findMany({ where: { karatId }, orderBy: [{ effectiveAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }], skip: Number(skip), take: Number(take) })
+    return serializeBigInts(prices)
   })
 
   app.addHook('onClose', async () => prisma.$disconnect())

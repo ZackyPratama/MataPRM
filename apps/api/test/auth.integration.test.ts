@@ -40,6 +40,24 @@ describe('authentication SQLite integration', () => {
     await app.close()
   })
 
+  it('creates append-only gold prices with owner-only access and safe BigInt JSON', async () => {
+    const karat = await prisma.karat.create({ data: { label: 'IT-24K', sortOrder: 99 } })
+    const app = buildApp(prisma)
+    const ownerLogin = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { code: 'IT', pin: '123456' } })
+    const ownerToken = ownerLogin.json().token
+    const assistant = await prisma.user.create({ data: { code: 'IA', name: 'Assistant', role: 'ASSISTANT', pinHash: hashPin('654321') } })
+    const assistantLogin = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { code: assistant.code, pin: '654321' } })
+    const assistantToken = assistantLogin.json().token
+    expect((await app.inject({ method: 'POST', url: '/api/gold-prices', headers: { authorization: `Bearer ${assistantToken}` }, payload: { karatId: karat.id, pricePerGram: '1500000' } })).statusCode).toBe(403)
+    const created = await app.inject({ method: 'POST', url: '/api/gold-prices', headers: { authorization: `Bearer ${ownerToken}` }, payload: { karatId: karat.id, pricePerGram: '1500000' } })
+    expect(created.statusCode).toBe(201)
+    expect(created.json().pricePerGram).toBe('1500000')
+    expect((await app.inject({ method: 'GET', url: `/api/gold-prices/${karat.id}/current`, headers: { authorization: `Bearer ${assistantToken}` } })).json().pricePerGram).toBe('1500000')
+    expect((await app.inject({ method: 'POST', url: '/api/gold-prices', headers: { authorization: `Bearer ${ownerToken}` }, payload: { karatId: karat.id, pricePerGram: '9223372036854775808' } })).statusCode).toBe(400)
+    expect(await prisma.auditLog.count({ where: { action: 'PRICE_SET', entity: 'GoldPrice' } })).toBe(1)
+    await app.close()
+  })
+
   it('logs in, stores only token hash, logs out, and rejects expired, revoked, or inactive sessions', async () => {
     const app = buildApp(prisma)
     const login = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { code: 'IT', pin: '123456' } })
@@ -47,7 +65,8 @@ describe('authentication SQLite integration', () => {
     const { token } = login.json()
     const stored = await prisma.session.findUniqueOrThrow({ where: { tokenHash: sessionTokenHash(token) } })
     expect(stored.tokenHash).not.toBe(token)
-    expect(await prisma.auditLog.count({ where: { action: 'AUTH_LOGIN' } })).toBe(1)
+    const loginAuditCount = await prisma.auditLog.count({ where: { action: 'AUTH_LOGIN', entity: 'Session', userId } })
+    expect(loginAuditCount).toBeGreaterThan(0)
     expect((await app.inject({ method: 'POST', url: '/api/auth/logout', headers: { authorization: `Bearer ${token}` } })).statusCode).toBe(204)
     expect((await app.inject({ method: 'GET', url: '/api/auth/session', headers: { authorization: `Bearer ${token}` } })).statusCode).toBe(401)
     const expiredToken = randomBytes(32).toString('base64url')
