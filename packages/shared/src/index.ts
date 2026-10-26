@@ -23,6 +23,7 @@ export function serializeBigInts<T>(value: T): unknown {
 }
 
 export * from './inventory.js'
+export * from './sales.js'
 
 export const sharedWorkspace = '@mataprm/shared'
 

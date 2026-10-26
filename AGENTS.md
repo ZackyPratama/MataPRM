@@ -205,7 +205,7 @@ Jika salah satu langkah gagal, tidak ada yang tersimpan.
 
 ### 9.5.1 Nomor nota
 
-Format `<User.code>-<YYYYMMDD>-<urut 3 digit>`, misalnya `A-20261019-003`. Urutan dihitung per akun per hari sehingga dua perangkat offline tidak menghasilkan nomor yang sama.
+Format `<User.code>-<YYYYMMDD>-<deviceCode>-<urut 3 digit>`, misalnya `A-20261019-HP1-003`. `deviceCode` dibawa perangkat dan urutan dihitung per akun, perangkat, dan hari agar dua perangkat offline tidak menghasilkan nomor yang sama.
 
 ### 9.6 Pembatalan transaksi
 
